@@ -1,4 +1,7 @@
-
+# denoise_bscans_cyclic_1.py
+# what is new here 
+# Trying out cyclic loss
+ 
 from __future__ import print_function
 
 import configparser
@@ -12,7 +15,7 @@ import glob
 import sys
 
 import data.dataset_loader as dataset_loader
-from modelBase import arvo_slim_unet2D_deepSupervision
+from modelBase import noise2noise_unet2D_1
 
 
 
@@ -48,7 +51,7 @@ def getdata(datapath):
 
 def evaluate():
     inputs = tf.placeholder(tf.float32, shape=[None, FLAGS.width,FLAGS.height,FLAGS.depth])
-    predictions, variables_to_restore, conv2_upsampledTwice, conv7_upsampledTwice = arvo_slim_unet2D_deepSupervision.unet2D_arvo_6mm_test5( inputs, FLAGS.num_class, False, False)     
+    predictions, variables_to_restore, conv2_upsampledTwice, conv7_upsampledTwice = noise2noise_unet2D_1.noise2noise_unet2D_1( inputs, FLAGS.num_class, False, False)     
     init_op = tf.group(tf.global_variables_initializer(),
                        tf.local_variables_initializer())
     sess = tf.Session()
@@ -126,63 +129,37 @@ def train ():
     targets = tf.placeholder(tf.float32, shape=[None, FLAGS.width,FLAGS.height,FLAGS.depth])
     learning_rate = tf.placeholder(tf.float32, shape=[])
     
-    #logits,score = unet.build(inputs,1,True)    
-    #loss = tf.losses.mean_squared_error(i1,score)
-    predictions, variables_to_restore, conv2_upsampledTwice, conv7_upsampledTwice = arvo_slim_unet2D_deepSupervision.unet2D_arvo_6mm_test5( inputs, FLAGS.num_class, True, False)
+    predictions1, variables_to_restore1, conv2_upsampledTwice1, conv7_upsampledTwice1 = noise2noise_unet2D_1.noise2noise_unet2D_1( inputs, FLAGS.num_class, False, False)
+    #inverse 
+    predictions2, variables_to_restore2, conv2_upsampledTwice2, conv7_upsampledTwice2 = noise2noise_unet2D_1.noise2noise_unet2D_1( targets, FLAGS.num_class, False, True)
     
     
-    loss = tf.losses.mean_squared_error(labels=targets, predictions=predictions)
-    deep_loss = tf.losses.mean_squared_error(labels=targets, predictions=conv7_upsampledTwice) +  0.25*tf.losses.mean_squared_error(labels=targets, predictions=conv2_upsampledTwice)
     
-    gradient_loss = gradientdistance(targets, predictions)
-    #6mm_test_5
-    #total_loss = 0.9*loss + 0.1*deep_loss
-    #6mm_test_6
-    #calls unet2D_arvo_6mm_test5
-    # test 8 
-	#total_loss = 0.9*loss + 0.1*deep_loss + 1000.0*gradient_loss
-	# test 1 for noise to noise
-    #total_loss = 0.9*loss + 0.1*deep_loss 
-    total_loss = 0.4*tf.reduce_mean(tf.abs(targets - predictions))+ 0.1*tf.reduce_mean(tf.abs(targets - conv7_upsampledTwice))+0.5*tf.reduce_mean(tf.abs(targets - conv2_upsampledTwice))
-	
-	
-    #Averaging
-    #total_loss = 0.75*loss + 0.25 * deep_loss
-	#total_loss = 0.8*loss + 0.1 * deep_loss + 0.1*tf.reduce_mean(tf.abs(targets - predictions))
-    #total_loss = loss + 0.25*deep_loss + 0.25*tf.reduce_mean(tf.abs(targets - predictions))
-    #noisetonoise
-    #6mm 128x128
-    #noise to noise
-    #first test the choroid was not perfect upping the  conv2 
-    #total_loss = 0.6*tf.reduce_mean(tf.abs(targets - predictions))+ 0.2*tf.reduce_mean(tf.abs(targets - conv7_upsampledTwice))+0.2*tf.reduce_mean(tf.abs(targets - conv2_upsampledTwice))
-    #print ( 'target: ', targets.shape)
-    #total_loss = 0.4*tf.reduce_mean(tf.abs(targets - predictions))+ 0.1*tf.reduce_mean(tf.abs(targets - conv7_upsampledTwice))+0.5*tf.reduce_mean(tf.abs(targets - conv2_upsampledTwice))
+    loss1 = tf.losses.mean_squared_error(labels=targets, predictions=predictions1)
+    loss2 = tf.losses.mean_squared_error(labels=inputs, predictions=predictions2)
     
-    ### SEGMENTATION LOSS ####
-    #predictions = (predictions/tf.sqrt(1+tf.pow(predictions,2))+1)/2
-    #deep_prediction_2 = (conv7_upsampledTwice/tf.sqrt(1+tf.pow(conv7_upsampledTwice,2))+1)/2
-    #deep_prediction_7 = (conv7_upsampledTwice/tf.sqrt(1+tf.pow(conv7_upsampledTwice,2))+1)/2
-    #loss = tf.losses.hinge_loss(targets, predictions) 
-    #deep_loss = 0.75*tf.losses.hinge_loss(targets, deep_prediction_7) + 0.25*tf.losses.hinge_loss(targets, deep_prediction_2)
-    #total_loss = 0.75*loss + 0.25*deep_loss
-    
+    deep_loss1 = tf.losses.mean_squared_error(labels=targets, predictions=conv7_upsampledTwice1) +  0.25*tf.losses.mean_squared_error(labels=targets, predictions=conv2_upsampledTwice1)
+    deep_loss2 = tf.losses.mean_squared_error(labels=inputs,  predictions=conv7_upsampledTwice2) +  0.25*tf.losses.mean_squared_error(labels=inputs,  predictions=conv2_upsampledTwice2)
+    #total loss is a combination of the two losses
+    total_loss = 0.4*loss1+0.4*loss2+0.2*deep_loss1+0.2*deep_loss2
     
     tf.summary.scalar('losses/total_loss', total_loss)
-    tf.summary.scalar('losses/loss', loss)
-    tf.summary.scalar('losses/deep_loss', deep_loss)
-    tf.summary.scalar('losses/gradient_loss', gradient_loss)
+    tf.summary.scalar('losses/loss1', loss1)
+    tf.summary.scalar('losses/deep_loss1', deep_loss1)
+    tf.summary.scalar('losses/loss2', loss2)
+    tf.summary.scalar('losses/deep_loss2', deep_loss2)
+
     
-    tf.summary.image('predictions', predictions)
-    tf.summary.image("input_image",inputs,  max_outputs=8)
-    tf.summary.image("ground_truth",targets,  max_outputs=8)
-    tf.summary.image("pred_annotation", predictions, max_outputs=8)
-    tf.summary.image("pred_deep_7", conv7_upsampledTwice, max_outputs=8)
-    tf.summary.image("pred_deep_2", conv2_upsampledTwice, max_outputs=8)
+    tf.summary.image("input_image",inputs,  max_outputs=3)
+    tf.summary.image("ground_truth",targets,  max_outputs=3)
+    
+    tf.summary.image("prediction1", predictions1, max_outputs=3)
+    tf.summary.image("prediction2", predictions2, max_outputs=3)
 
     
     
     global_step = tf.Variable(0, name = 'global_step', trainable = False)
-    train_op = arvo_slim_unet2D_deepSupervision.train(total_loss, learning_rate, global_step)
+    train_op = noise2noise_unet2D_1.train(total_loss, learning_rate, global_step)
 
     
     init_op = tf.group(tf.global_variables_initializer(),tf.local_variables_initializer())
@@ -195,10 +172,9 @@ def train ():
     writer = tf.summary.FileWriter(FLAGS.checkpointdir + "/train_logs", sess.graph)
     merged = tf.summary.merge_all()
     totalstart = time.clock();
-    for it in range(0,30000,1):
+    for it in range(0,90000,1):
         start = time.clock()
-        step = tf.train.global_step(sess, global_step)
-    
+        step = tf.train.global_step(sess, global_step)    
         print ( 'step/batch : ', str ( int  ( it)))
         print ( 'step/batch : ', step)
         x,y = getdata(FLAGS.traindatapath)
@@ -211,7 +187,6 @@ def train ():
         if it%500==0:        
             checkpoint_path = os.path.join(FLAGS.checkpointdir, 'unet.ckpt')
             saver.save(sess,  checkpoint_path, global_step=step)
-
     writer.close()
     sess.close()
                 
@@ -277,24 +252,3 @@ if __name__ == '__main__':
             flags.DEFINE_string( 'checkpointpath',Config['EVAL_PARAMS']['CkptPath'],'ckeckpointDir')
         tf.app.run()
         
-"""
-if __name__ == '__main__':
-
-    parser = argparse.ArgumentParser(description = 'Train Unet on given tfrecords directory.')
-    parser.add_argument('--tfrecords_dir', help = 'Tfrecords directory')
-    parser.add_argument('--tfrecords_prefix', help = 'Tfrecords prefix', default = 'training')
-    parser.add_argument('--checkpoint_dir', help = 'Checkpoints directory')
-    parser.add_argument('--num_classes', help = 'Number of segmentation labels', type = int, default = 2)
-    parser.add_argument('--class_weights', help = 'Weight per class for weighted loss. .npy file that contains single array [num_classes]')
-    parser.add_argument('--image_size', help = 'Target image size (resize)', type = int, default = 224)
-    parser.add_argument('--learning_rate', help = 'Learning rate', type = float, default = 1e-4)
-    parser.add_argument('--learning_rate_decay_steps', help = 'Learning rate decay steps', type = int, default = 10000)
-    parser.add_argument('--learning_rate_decay_rate', help = 'Learning rate decay rate', type = float, default = 0.9)
-    parser.add_argument('--weight_decay_rate', help = 'Weight decay rate', type = float, default = 0.0005)
-    parser.add_argument('--batch_size', help = 'Batch size', type = int, default = 8)
-    parser.add_argument('--num_epochs', help = 'Number of epochs', type = int, default = 1000)
-
-    #FLAGS, unparsed = parser.parse_known_args()
-
-    tf.app.run()
-"""
