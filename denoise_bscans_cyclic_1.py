@@ -48,7 +48,63 @@ def getdata(datapath):
     return x,y
 
 
+def getdata_batch(datapath, start, end):
+    x = np.zeros((FLAGS.batch_size,FLAGS.width,FLAGS.height,FLAGS.depth))
+    full_path = os.path.join(datapath, '*.dat')
+    fls =  glob.glob(full_path)
+    print ("start ", start, "end ", end)
+    for it in range(start, end):
+        X = np.array(np.fromfile(fls[it-1],dtype=np.float32)).reshape(FLAGS.width,FLAGS.height,FLAGS.depth)
+        # shuffle
+        #shuf = numpy.random.permutation(21)
+        #X = X[:,:,shuf]
+        #Y = Y[shuf]
+        x[it-start,:,:,:] = X
+    return x
+    
+def evaluate_batch():
+    inputs = tf.placeholder(tf.float32, shape=[None, FLAGS.width,FLAGS.height,FLAGS.depth])
+    predictions, variables_to_restore, conv2_upsampledTwice, conv7_upsampledTwice = noise2noise_unet2D_1.noise2noise_unet2D_1( inputs, FLAGS.num_class, False, False)     
+    init_op = tf.group(tf.global_variables_initializer(),
+                       tf.local_variables_initializer())
+    sess = tf.Session()
+    sess.run(init_op)
+    saver = tf.train.Saver()
 
+      
+    
+    if not tf.gfile.Exists(FLAGS.checkpointpath + '.meta'):
+        raise ValueError("Can't find checkpoint file")
+    else:
+        print('[INFO    ]\tFound checkpoint file, restoring model.')
+        saver.restore(sess, FLAGS.checkpointpath)
+    testPath=FLAGS.evaldatapath
+    testOutPath = os.path.join(testPath, 'out')
+    if not tf.gfile.Exists(testOutPath):
+        print('[INFO    ]\tOut directory does not exist, creating directory: ' + os.path.abspath(testOutPath))
+        tf.gfile.MakeDirs(testOutPath)
+    full_path = os.path.join(testPath, '*.dat')
+    fls =  glob.glob(full_path)
+    numD = len(fls)
+    for it in range(1, numD+1, FLAGS.batch_size):
+        print(it)
+        end = it+FLAGS.batch_size
+        if it+FLAGS.batch_size > FLAGS.NumData+1:
+            end =  FLAGS.NumData
+        x = getdata_batch(FLAGS.evaldatapath, it, end)
+        predicted_values, conv2_upsampledTwice_values=sess.run([predictions,conv2_upsampledTwice], feed_dict={inputs:x.astype(FLAGS.dtyp)})
+        for it2 in range(it, end):
+            file=fls[it2-1]
+            outname=os.path.basename(file)
+            outpath=os.path.join(testOutPath, outname)
+            print  ( outpath )
+            fid = open(outpath,"w")
+            predicted_values[it2-it,:,:,:].tofile(fid)
+            #file.write(predicted_values)
+            fid.close()
+        
+        
+        
 def evaluate():
     inputs = tf.placeholder(tf.float32, shape=[None, FLAGS.width,FLAGS.height,FLAGS.depth])
     predictions, variables_to_restore, conv2_upsampledTwice, conv7_upsampledTwice = noise2noise_unet2D_1.noise2noise_unet2D_1( inputs, FLAGS.num_class, False, False)     
@@ -217,7 +273,7 @@ def main(_):
         train()
     else:
         print  ('evaluate')
-        evaluate()
+        evaluate_batch()
         
         
 
