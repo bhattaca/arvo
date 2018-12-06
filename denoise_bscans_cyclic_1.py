@@ -197,7 +197,7 @@ def train ():
     deep_loss1 = tf.losses.mean_squared_error(labels=targets, predictions=conv7_upsampledTwice1) +  0.25*tf.losses.mean_squared_error(labels=targets, predictions=conv2_upsampledTwice1)
     deep_loss2 = tf.losses.mean_squared_error(labels=inputs,  predictions=conv7_upsampledTwice2) +  0.25*tf.losses.mean_squared_error(labels=inputs,  predictions=conv2_upsampledTwice2)
     #total loss is a combination of the two losses
-    total_loss = 0.4*loss1+0.4*loss2+0.2*deep_loss1+0.2*deep_loss2
+    total_loss = 0.6*loss1+0.6*loss2+0.1*deep_loss1+0.1*deep_loss2
     
     tf.summary.scalar('losses/total_loss', total_loss)
     tf.summary.scalar('losses/loss1', loss1)

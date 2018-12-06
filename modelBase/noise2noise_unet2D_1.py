@@ -132,5 +132,5 @@ def noise2noise_unet2D_1(image_batch_tensor,
             conv2_out = slim.conv2d(conv2, number_of_classes, [1,1], normalizer_fn=None, activation_fn=None,scope='hidden2')
             conv2_upsampledTwice = deconv_upsample(conv2_out, 4,  'hidden2_upsample4')
                    
-    return conv10, tf.contrib.framework.get_variables(unet_scope), conv2_upsampledTwice, conv7_upsampledTwice
+    return conv11, tf.contrib.framework.get_variables(unet_scope), conv2_upsampledTwice, conv7_upsampledTwice
 
